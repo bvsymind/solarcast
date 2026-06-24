@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Primary - Orange */
+  --color-primary-50: #FFF7F0;
+  --color-primary-100: #FFE8D5;
+  --color-primary-200: #FFD1AA;
+  --color-primary-300: #FFB980;
+  --color-primary-400: #FFA255;
+  --color-primary-500: #FF5A00;
+  --color-primary-600: #E05000;
+  --color-primary-700: #BF4400;
+  --color-primary-800: #9E3700;
+  --color-primary-900: #7D2B00;
+  --color-primary-950: #5C1F00;
+
+  /* Secondary - Sky Blue */
+  --color-sky-50: #F0FAFF;
+  --color-sky-100: #D5F2FF;
+  --color-sky-200: #AAE5FF;
+  --color-sky-300: #80D8FF;
+  --color-sky-400: #6FC8F3;
+  --color-sky-500: #4DB8E8;
+  --color-sky-600: #3A9ECF;
+  --color-sky-700: #2E83AD;
+  --color-sky-800: #23698C;
+  --color-sky-900: #1A4F6A;
+  --color-sky-950: #113548;
+
+  /* Surface */
+  --color-surface: #FFFFFF;
+  --color-surface-secondary: #F8F9FA;
+  --color-surface-tertiary: #F1F3F5;
+
+  /* Glass */
+  --color-glass: rgba(255, 255, 255, 0.8);
+  --color-glass-strong: rgba(255, 255, 255, 0.95);
+  --color-glass-weak: rgba(255, 255, 255, 0.6);
+
+  /* Shadows */
+  --shadow-soft: 0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.06);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+
+  /* Border Radius */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+
+  /* Typography Scale */
+  --font-size-hero: clamp(3rem, 8vw, 6rem);
+  --font-size-display: clamp(2rem, 5vw, 4rem);
+  --font-size-h1: clamp(1.75rem, 4vw, 3rem);
+  --font-size-h2: clamp(1.5rem, 3vw, 2.25rem);
+  --font-size-h3: clamp(1.25rem, 2vw, 1.75rem);
+  --font-size-body: 1rem;
+  --font-size-small: 0.875rem;
+  --font-size-caption: 0.75rem;
+
+  /* Spacing */
+  --spacing-section: clamp(4rem, 10vw, 8rem);
+  --spacing-container: clamp(1rem, 5vw, 5rem);
+
+  /* Glass Effect */
+  --backdrop-blur-glass: 12px;
+
+  /* Animations */
+  --animate-fade-in: fade-in 0.5s ease-in-out;
+  --animate-slide-up: slide-up 0.5s ease-out;
+  --animate-float: float 6s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes slide-up {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+}
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+
+  body {
+    @apply bg-white text-gray-900 antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  /* Glassmorphism Card */
+  .glass-card {
+    @apply rounded-3xl border border-white/30 bg-white/80 shadow-glass backdrop-blur-glass;
+  }
+
+  .glass-card-strong {
+    @apply rounded-3xl border border-white/30 bg-white/95 shadow-glass backdrop-blur-glass;
+  }
+
+  /* Section Container */
+  .section-container {
+    @apply mx-auto max-w-7xl;
+    padding-inline: var(--spacing-container);
+  }
+
+  /* Hero Typography */
+  .text-hero {
+    font-size: var(--font-size-hero);
+    @apply font-bold leading-[0.9] tracking-tight;
+  }
+
+  .text-display {
+    font-size: var(--font-size-display);
+    @apply font-bold leading-[1.1] tracking-tight;
+  }
+
+  /* Gradient Text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary-500 to-sky-400 bg-clip-text text-transparent;
+  }
+
+  /* Button Base */
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-2xl bg-primary-500 px-8 py-4 text-sm font-semibold text-white transition-all duration-300 hover:bg-primary-600 hover:shadow-lg hover:shadow-primary-500/25 active:scale-[0.98];
+  }
+
+  .btn-glass {
+    @apply inline-flex items-center justify-center rounded-2xl border border-white/30 bg-white/70 px-8 py-4 text-sm font-semibold text-gray-900 backdrop-blur-glass transition-all duration-300 hover:bg-white/90 hover:shadow-glass;
+  }
+
+  /* Section Spacing */
+  .section-padding {
+    padding-block: var(--spacing-section);
+  }
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
