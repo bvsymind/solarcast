@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { DashboardState, PvPanelParams, PvArrayConfig } from "@/types";
 import { calcDerivedValues, calcEnergy } from "@/lib/pv-calculator";
+import { fitPanelsInPolygon } from "@/lib/array-layout";
 
 const DEFAULT_PV_PARAMS: PvPanelParams = {
   power: 400,
@@ -20,6 +21,13 @@ const DEFAULT_PV_CONFIG: PvArrayConfig = {
   nParallel: 5,
 };
 
+const DEFAULT_FEASIBILITY_INPUT = {
+  panelLengthMm: 2000,
+  panelWidthMm: 1000,
+  groundCoverageRatio: 0.5,
+  tiltAngle: 20,
+};
+
 export const useDashboardStore = create<DashboardState>((set, get) => ({
   selectedLocation: null,
   locationInfo: null,
@@ -32,6 +40,12 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
   pvConfig: { ...DEFAULT_PV_CONFIG },
   pvDerived: calcDerivedValues(DEFAULT_PV_PARAMS, DEFAULT_PV_CONFIG),
   pvEnergy: null,
+
+  // Feasibility
+  feasibilityInput: { ...DEFAULT_FEASIBILITY_INPUT },
+  feasibilityResult: null,
+  feasibilityPolygon: null,
+  drawMode: false,
 
   setSelectedLocation: (loc) =>
     set({ selectedLocation: loc, locationName: loc.name ?? null, error: null }),
@@ -67,6 +81,40 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         : null;
     set({ pvDerived: derived, pvEnergy: energy });
   },
+
+  setFeasibilityInput: (partial) => {
+    set((s) => ({
+      feasibilityInput: { ...s.feasibilityInput, ...partial },
+    }));
+    get().recalcFeasibility();
+  },
+
+  setFeasibilityPolygon: (polygon) => {
+    set({ feasibilityPolygon: polygon, drawMode: false });
+    if (polygon) {
+      get().recalcFeasibility();
+    } else {
+      set({ feasibilityResult: null });
+    }
+  },
+
+  setDrawMode: (active) =>
+    set({ drawMode: active }),
+
+  recalcFeasibility: () => {
+    const { feasibilityPolygon, feasibilityInput, pvParams, solarData } = get();
+    if (!feasibilityPolygon || !solarData?.monthly) {
+      set({ feasibilityResult: null });
+      return;
+    }
+    const result = fitPanelsInPolygon(
+      feasibilityPolygon.coordinates[0] as [number, number][],
+      feasibilityInput,
+      pvParams.power,
+      solarData.monthly
+    );
+    set({ feasibilityResult: result });
+  },
 }));
 
 // Recalc when solarData loads (called from useSolarDataQuery)
@@ -75,6 +123,9 @@ useDashboardStore.setState({
   setSolarData: (data) => {
     origSetSolarData(data);
     // Trigger recalc after state is set
-    setTimeout(() => useDashboardStore.getState().recalcPv(), 0);
+    setTimeout(() => {
+      useDashboardStore.getState().recalcPv();
+      useDashboardStore.getState().recalcFeasibility();
+    }, 0);
   },
 });

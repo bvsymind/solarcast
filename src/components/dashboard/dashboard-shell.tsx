@@ -159,6 +159,11 @@ export function DashboardShell() {
 
   const selectedLocation = useDashboardStore((s) => s.selectedLocation);
   const setSelectedLocation = useDashboardStore((s) => s.setSelectedLocation);
+  const drawMode = useDashboardStore((s) => s.drawMode);
+  const setDrawMode = useDashboardStore((s) => s.setDrawMode);
+  const setFeasibilityPolygon = useDashboardStore((s) => s.setFeasibilityPolygon);
+  const feasibilityPolygon = useDashboardStore((s) => s.feasibilityPolygon);
+  const feasibilityResult = useDashboardStore((s) => s.feasibilityResult);
 
   useSolarDataQuery();
 
@@ -179,6 +184,12 @@ export function DashboardShell() {
           onLocationSelect={handleLocationSelect}
           selectedLocation={selectedLocation}
           isMobile
+          drawMode={drawMode}
+          hasPolygon={feasibilityPolygon !== null}
+          onDrawPolygon={setFeasibilityPolygon}
+          onClearPolygon={() => setFeasibilityPolygon(null)}
+          onToggleDraw={() => setDrawMode(!drawMode)}
+          feasibilityRows={feasibilityResult?.rows ?? null}
         />
 
         {/* Home button */}
@@ -280,6 +291,12 @@ export function DashboardShell() {
       <MapContainer
         onLocationSelect={handleLocationSelect}
         selectedLocation={selectedLocation}
+        drawMode={drawMode}
+        hasPolygon={feasibilityPolygon !== null}
+        onDrawPolygon={setFeasibilityPolygon}
+        onClearPolygon={() => setFeasibilityPolygon(null)}
+        onToggleDraw={() => setDrawMode(!drawMode)}
+        feasibilityRows={feasibilityResult?.rows ?? null}
       />
 
       {/* ── Right resize handle ── */}

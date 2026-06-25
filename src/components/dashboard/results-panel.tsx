@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/store";
 import { IrradianceChart, TemperatureChart } from "@/components/charts";
 import { PvResultsSummary } from "@/components/pv-simulator";
+import { FeasibilityResults } from "@/components/solar-analysis";
 import { usePdfDownload } from "@/components/pdf";
 
 interface ResultsPanelProps {
@@ -238,6 +239,9 @@ export function ResultsPanel({ collapsed, width, isMobile }: ResultsPanelProps) 
 
             {/* PV System Results */}
             <PvResultsSummary />
+
+            {/* Feasibility Results */}
+            <FeasibilityResults />
           </>
         )}
 

@@ -3,6 +3,9 @@
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import "maplibre-gl-draw/dist/mapbox-gl-draw.css";
+import { usePolygonDraw, DrawToolbar, useArrayOverlay } from "@/components/map";
+import type { ArrayRow } from "@/types";
 
 export interface MapLocation {
   lat: number;
@@ -14,6 +17,13 @@ interface MapContainerProps {
   onLocationSelect: (loc: MapLocation) => void;
   selectedLocation: MapLocation | null;
   isMobile?: boolean;
+  /* ─── Feasibility polygon props ─── */
+  drawMode?: boolean;
+  hasPolygon?: boolean;
+  onDrawPolygon?: (polygon: GeoJSON.Polygon) => void;
+  onClearPolygon?: () => void;
+  onToggleDraw?: () => void;
+  feasibilityRows?: ArrayRow[] | null;
 }
 
 const OSM_STYLE: maplibregl.StyleSpecification = {
@@ -44,6 +54,12 @@ export function MapContainer({
   onLocationSelect,
   selectedLocation,
   isMobile,
+  drawMode = false,
+  hasPolygon = false,
+  onDrawPolygon,
+  onClearPolygon,
+  onToggleDraw,
+  feasibilityRows,
 }: MapContainerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -52,6 +68,10 @@ export function MapContainer({
   // Keep callback in a ref so map handlers always use latest
   const onSelectRef = useRef(onLocationSelect);
   onSelectRef.current = onLocationSelect;
+
+  // Keep drawMode in a ref so the click handler can check it
+  const drawModeRef = useRef(drawMode);
+  drawModeRef.current = drawMode;
 
   // Flag to skip the sync flyTo when the user clicked the map
   const internalUpdateRef = useRef(false);
@@ -86,8 +106,11 @@ export function MapContainer({
         "bottom-right"
       );
 
-      // Click → place marker + report coords
+      // Click → place marker + report coords (skip when drawing polygon)
       map.on("click", (e) => {
+        // Don't interfere with polygon draw mode
+        if (drawModeRef.current) return;
+
         const { lng, lat } = e.lngLat;
 
         if (markerRef.current) {
@@ -129,6 +152,25 @@ export function MapContainer({
       mapRef.current = null;
     };
   }, []);
+
+  // ── Polygon draw control ──
+  const { clearPolygon } = usePolygonDraw({
+    map: mapRef.current,
+    active: drawMode,
+    onPolygon: (polygon) => {
+      onDrawPolygon?.(polygon);
+    },
+    onClear: () => {
+      onClearPolygon?.();
+    },
+  });
+
+  // ── Solar array overlay ──
+  useArrayOverlay({
+    map: mapRef.current,
+    rows: feasibilityRows ?? null,
+    visible: hasPolygon && !drawMode,
+  });
 
   // ── Sync external location changes (search / GPS) to map ──
   useEffect(() => {
@@ -177,13 +219,33 @@ export function MapContainer({
       <div ref={containerRef} className="h-full w-full absolute inset-0" />
 
       {/* Hint overlay */}
-      {!selectedLocation && (
+      {!selectedLocation && !drawMode && (
         <div className={`pointer-events-none absolute inset-0 z-10 flex items-end justify-center ${isMobile ? "pb-24" : "pb-8"}`}>
           <div className="animate-slide-up rounded-2xl border border-gray-200 bg-white/90 px-6 py-3 text-sm font-medium text-gray-600 shadow-glass backdrop-blur-sm">
             Click anywhere on the map to select a location
           </div>
         </div>
       )}
+
+      {/* Draw mode hint */}
+      {drawMode && (
+        <div className={`pointer-events-none absolute inset-0 z-10 flex items-end justify-center ${isMobile ? "pb-24" : "pb-8"}`}>
+          <div className="rounded-2xl border border-primary-200 bg-primary-50/95 px-6 py-3 text-sm font-medium text-primary-700 shadow-glass backdrop-blur-sm">
+            Click to place vertices · Double-click to close polygon
+          </div>
+        </div>
+      )}
+
+      {/* Draw toolbar */}
+      <DrawToolbar
+        active={drawMode}
+        hasPolygon={hasPolygon}
+        onToggle={() => onToggleDraw?.()}
+        onClear={() => {
+          clearPolygon();
+          onClearPolygon?.();
+        }}
+      />
     </section>
   );
 }

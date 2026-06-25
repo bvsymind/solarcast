@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import type { MapLocation } from "./map-container";
 import { useDashboardStore } from "@/store";
 import { PvParamsForm } from "@/components/pv-simulator";
+import { FeasibilityForm } from "@/components/solar-analysis";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -314,6 +315,7 @@ export function Sidebar({
           onUseCurrent={handleGps}
         />
         <PvParamsForm />
+        <FeasibilityForm />
       </div>
     </aside>
   );
