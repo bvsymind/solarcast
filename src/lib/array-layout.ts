@@ -107,10 +107,10 @@ export function rowPitchMeters(
  * Fit solar panel rows inside a polygon, oriented south-facing.
  *
  * Strategy:
- * 1. Find the bounding box of the polygon in meters
- * 2. Place rows from the back (north edge for NH, south edge for SH)
- * 3. For each row, test which segments intersect the polygon
- * 4. Place panels along the row within the polygon
+ * 1. Compute row pitch from GCR: P = L·cos(θ) / GCR  (clamped to min shading pitch)
+ * 2. Distribute rows evenly across the full N–S extent of the polygon
+ * 3. At each row latitude, find E–W spans by intersecting with polygon edges
+ * 4. Place panels within each span
  */
 export function fitPanelsInPolygon(
   polygonCoords: [number, number][],
@@ -119,97 +119,95 @@ export function fitPanelsInPolygon(
   monthlySolar: MonthlySolarData[]
 ): FeasibilityResult {
   const area = computePolygonArea(polygonCoords);
-  const effectiveArea = area * input.groundCoverageRatio;
+  const gcr = input.groundCoverageRatio;
 
   const panelLengthM = input.panelLengthMm / 1000;
   const panelWidthM = input.panelWidthMm / 1000;
+  const tiltRad = (input.tiltAngle * Math.PI) / 180;
 
   // Compute centroid for orientation decisions
   const centroid = polygonCentroid(polygonCoords);
-  const pitch = rowPitchMeters(panelLengthM, input.tiltAngle, centroid.lat);
 
-  // Get bounds in lat/lng
+  // Projected N–S footprint of one tilted row
+  const projectedM = panelLengthM * Math.cos(tiltRad);
+
+  // Minimum row pitch (to avoid winter solstice self-shading)
+  const minPitchM = rowPitchMeters(panelLengthM, input.tiltAngle, centroid.lat);
+
+  // Row pitch needed to achieve target GCR
+  // GCR = projected / pitch  →  pitch = projected / GCR
+  const gcrPitchM = projectedM / gcr;
+
+  // Use the larger pitch (lower density wins — can't pack denser than shading allows)
+  const actualPitchM = Math.max(gcrPitchM, minPitchM);
+  const actualGcr = projectedM / actualPitchM;
+
+  // Effective area based on actual GCR
+  const effectiveArea = area * actualGcr;
+
+  // Get lat bounds
   const lats = polygonCoords.map((c) => c[1]);
-  const lngs = polygonCoords.map((c) => c[0]);
   const minLat = Math.min(...lats);
   const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
 
-  // Convert bounds to meters from centroid
+  // Convert units
   const mPerDegLat = metersPerDegLat();
   const mPerDegLng = metersPerDegLng(centroid.lat);
-
   const heightM = (maxLat - minLat) * mPerDegLat;
-  const widthM = (maxLng - minLng) * mPerDegLng;
 
   // Determine row direction
-  // South-facing: rows run E–W. North edge is farther from equator.
   const isNorthern = centroid.lat >= 0;
 
-  // Row length = E–W dimension (widthM)
-  // Number of rows = N–S dimension / pitch
-  const maxRows = Math.floor(heightM / pitch);
-  if (maxRows <= 0) {
-    return {
-      polygonAreaM2: Math.round(area),
-      effectiveAreaM2: Math.round(effectiveArea),
-      panelCount: 0,
-      installedCapacityKw: 0,
-      annualEnergyKwh: 0,
-      monthlyEnergy: monthlySolar.map((m) => ({ month: m.month, energy: 0 })),
-      rows: [],
-    };
-  }
+  // Number of rows that fit in N–S extent with this pitch
+  const numRows = Math.max(1, Math.floor(heightM / actualPitchM));
 
-  // Panels per row = row length / panel width (panels are oriented portrait with long side along row, or landscape)
-  // Standard: long side (length) faces south along the tilt, short side (width) runs E–W along the row
-  const panelsPerRow = Math.floor(widthM / panelWidthM);
+  // Half-height of a row in degrees (visual only — doesn't affect spacing)
+  const rowHalfHeightDeg = projectedM / 2 / mPerDegLat;
 
   const rows: ArrayRow[] = [];
   let totalPanels = 0;
 
-  for (let r = 0; r < maxRows; r++) {
-    // Row center latitude (start from north edge going south for NH)
+  // Distribute rows evenly across the N–S extent
+  for (let r = 0; r < numRows; r++) {
+    // Row center latitude — evenly spaced from north to south
     const rowCenterLat = isNorthern
-      ? maxLat - ((r + 0.5) * pitch) / mPerDegLat
-      : minLat + ((r + 0.5) * pitch) / mPerDegLat;
+      ? maxLat - ((r + 0.5) * actualPitchM) / mPerDegLat
+      : minLat + ((r + 0.5) * actualPitchM) / mPerDegLat;
 
-    // Row spans from minLng to rowCenterLat - width/2 to rowCenterLat + width/2
-    // But we clip to polygon. For simplification, use full bounding box width clipped by polygon.
-    const rowHalfWidth = (panelsPerRow * panelWidthM) / 2;
+    // Find valid longitude spans at this latitude
+    const spans = intersectPolygonAtLatitude(polygonCoords, rowCenterLat);
 
-    const rowCenterLng = centroid.lng;
-    const leftLng = rowCenterLng - rowHalfWidth / mPerDegLng;
-    const rightLng = rowCenterLng + rowHalfWidth / mPerDegLng;
+    const top = rowCenterLat + rowHalfHeightDeg;
+    const bottom = rowCenterLat - rowHalfHeightDeg;
 
-    // Row polygon (rectangle in geographic coords)
-    const rowHalfHeight = (panelLengthM * Math.cos((input.tiltAngle * Math.PI) / 180)) / 2 / mPerDegLat;
-    const top = rowCenterLat + rowHalfHeight;
-    const bottom = rowCenterLat - rowHalfHeight;
+    for (const [lngStart, lngEnd] of spans) {
+      const spanWidthDeg = lngEnd - lngStart;
+      const spanWidthM = spanWidthDeg * mPerDegLng;
+      const panelsInSpan = Math.floor(spanWidthM / panelWidthM);
 
-    // Clip row to polygon (simple centroid check for now)
-    const rowMidLng = (leftLng + rightLng) / 2;
-    if (pointInPolygon([rowMidLng, rowCenterLat], polygonCoords)) {
+      if (panelsInSpan <= 0) continue;
+
+      const usedWidthM = panelsInSpan * panelWidthM;
+      const usedWidthDeg = usedWidthM / mPerDegLng;
+      const midLng = (lngStart + lngEnd) / 2;
+      const halfUsed = usedWidthDeg / 2;
+
       rows.push({
-        id: r,
+        id: rows.length,
         coordinates: [
-          [leftLng, bottom],
-          [rightLng, bottom],
-          [rightLng, top],
-          [leftLng, top],
-          [leftLng, bottom],
+          [midLng - halfUsed, bottom],
+          [midLng + halfUsed, bottom],
+          [midLng + halfUsed, top],
+          [midLng - halfUsed, top],
+          [midLng - halfUsed, bottom],
         ],
-        panelCount: panelsPerRow,
+        panelCount: panelsInSpan,
       });
-      totalPanels += panelsPerRow;
+      totalPanels += panelsInSpan;
     }
   }
 
-  // Apply GCR cap
-  const maxPanelsByGcr = Math.floor(effectiveArea / (panelLengthM * panelWidthM));
-  const panelCount = Math.min(totalPanels, maxPanelsByGcr);
-  const installedCapacityKw = (panelCount * panelPowerW) / 1000;
+  const installedCapacityKw = (totalPanels * panelPowerW) / 1000;
 
   // Energy estimation
   const energy = calcEnergy(installedCapacityKw, monthlySolar);
@@ -217,15 +215,66 @@ export function fitPanelsInPolygon(
   return {
     polygonAreaM2: Math.round(area),
     effectiveAreaM2: Math.round(effectiveArea),
-    panelCount,
+    panelCount: totalPanels,
     installedCapacityKw: Math.round(installedCapacityKw * 10) / 10,
     annualEnergyKwh: energy.annual,
     monthlyEnergy: energy.monthly,
-    rows: panelCount > 0 ? rows.slice(0, Math.ceil(panelCount / (panelsPerRow || 1))) : [],
+    rows,
   };
 }
 
 /* ─── Geometry helpers ─── */
+
+/**
+ * Find all longitude spans where a horizontal line at `lat`
+ * intersects the polygon. Returns sorted, non-overlapping [startLng, endLng] pairs.
+ */
+function intersectPolygonAtLatitude(
+  polygonCoords: [number, number][],
+  lat: number
+): [number, number][] {
+  const intersections: number[] = [];
+  const n = polygonCoords.length;
+
+  for (let i = 0; i < n; i++) {
+    const [lng1, lat1] = polygonCoords[i];
+    const [lng2, lat2] = polygonCoords[(i + 1) % n];
+
+    // Check if the edge crosses the horizontal line
+    const crosses =
+      (lat1 <= lat && lat2 > lat) || (lat2 <= lat && lat1 > lat);
+
+    if (crosses) {
+      // Linear interpolation to find intersection longitude
+      const t = (lat - lat1) / (lat2 - lat1);
+      const lngIntersect = lng1 + t * (lng2 - lng1);
+      intersections.push(lngIntersect);
+    }
+
+    // Edge exactly on the line — include both endpoints
+    if (lat2 === lat && lat1 !== lat) {
+      // The next edge will handle this vertex
+    }
+  }
+
+  // Sort intersections by longitude
+  intersections.sort((a, b) => a - b);
+
+  // Pair them up: each pair is an inside span
+  const spans: [number, number][] = [];
+  for (let i = 0; i < intersections.length - 1; i += 2) {
+    if (i + 1 < intersections.length) {
+      const start = intersections[i];
+      const end = intersections[i + 1];
+      // Skip degenerate spans
+      if (Math.abs(end - start) > 1e-9) {
+        spans.push([start, end]);
+      }
+    }
+  }
+
+  return spans;
+}
 
 function polygonCentroid(coords: [number, number][]): { lat: number; lng: number } {
   let lngSum = 0;
@@ -236,37 +285,4 @@ function polygonCentroid(coords: [number, number][]): { lat: number; lng: number
     latSum += lat;
   }
   return { lng: lngSum / n, lat: latSum / n };
-}
-
-/** Ray-casting point-in-polygon test */
-function pointInPolygon(
-  point: [number, number],
-  polygon: [number, number][]
-): boolean {
-  const [x, y] = point;
-  let inside = false;
-  const n = polygon.length;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
-      inside = !inside;
-    }
-  }
-  return inside;
-}
-
-/**
- * Check if a rectangular row (defined by 4 corner coords)
- * intersects the polygon. Uses centroid point-in-polygon check
- * (sufficient for small rows relative to polygon size).
- */
-export function rowIntersectsPolygon(
-  rowCoords: [number, number][],
-  polygonCoords: [number, number][]
-): boolean {
-  // Check centroid
-  const cx = rowCoords.slice(0, 4).reduce((s, c) => s + c[0], 0) / 4;
-  const cy = rowCoords.slice(0, 4).reduce((s, c) => s + c[1], 0) / 4;
-  return pointInPolygon([cx, cy], polygonCoords);
 }
