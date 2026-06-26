@@ -33,7 +33,6 @@ export function useArrayOverlay({ map, rows, visible }: ArrayOverlayProps) {
   useEffect(() => {
     if (!map) return;
 
-    // Build GeoJSON FeatureCollection from rows
     const features: GeoJSON.Feature[] =
       rows && visible
         ? rows.map((row) => ({
@@ -51,48 +50,67 @@ export function useArrayOverlay({ map, rows, visible }: ArrayOverlayProps) {
       features,
     };
 
-    // Add or update source
-    const source = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
-    if (source) {
-      source.setData(geojson);
+    const doAdd = () => {
+      // Add or update source (only if style is loaded)
+      if (!map.isStyleLoaded()) return;
+
+      try {
+        const source = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+        if (source) {
+          source.setData(geojson);
+        } else {
+          map.addSource(SOURCE_ID, {
+            type: "geojson",
+            data: geojson,
+          });
+
+          map.addLayer({
+            id: FILL_LAYER_ID,
+            type: "fill",
+            source: SOURCE_ID,
+            paint: {
+              "fill-color": FILL_COLOR,
+              "fill-opacity": FILL_OPACITY,
+            },
+          });
+
+          map.addLayer({
+            id: LINE_LAYER_ID,
+            type: "line",
+            source: SOURCE_ID,
+            paint: {
+              "line-color": STROKE_COLOR,
+              "line-width": STROKE_WIDTH,
+              "line-opacity": 0.8,
+            },
+          });
+        }
+      } catch {
+        // Style may have changed — retry on next render
+      }
+    };
+
+    // Try immediately, or wait for style to load
+    if (map.isStyleLoaded()) {
+      doAdd();
     } else {
-      map.addSource(SOURCE_ID, {
-        type: "geojson",
-        data: geojson,
-      });
-
-      // Fill layer (below labels but above raster)
-      map.addLayer({
-        id: FILL_LAYER_ID,
-        type: "fill",
-        source: SOURCE_ID,
-        paint: {
-          "fill-color": FILL_COLOR,
-          "fill-opacity": FILL_OPACITY,
-        },
-      });
-
-      // Line layer (stroke)
-      map.addLayer({
-        id: LINE_LAYER_ID,
-        type: "line",
-        source: SOURCE_ID,
-        paint: {
-          "line-color": STROKE_COLOR,
-          "line-width": STROKE_WIDTH,
-          "line-opacity": 0.8,
-        },
-      });
+      const onStyleLoad = () => doAdd();
+      map.once("style.load", onStyleLoad);
+      return () => {
+        map.off("style.load", onStyleLoad);
+      };
     }
 
     // Cleanup function
     cleanupRef.current = () => {
       try {
-        if (map.getLayer(LINE_LAYER_ID)) map.removeLayer(LINE_LAYER_ID);
-        if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
-        if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+        if (map.isStyleLoaded()) {
+          if (map.getLayer(LINE_LAYER_ID)) map.removeLayer(LINE_LAYER_ID);
+          if (map.getLayer(FILL_LAYER_ID)) map.removeLayer(FILL_LAYER_ID);
+          if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+        }
       } catch {
-        // ignore if already removed
+        // ignore
       }
     };
   }, [map, rows, visible]);
