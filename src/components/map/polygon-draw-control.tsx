@@ -96,12 +96,9 @@ export function usePolygonDraw({
     if (active) {
       draw.changeMode("draw_polygon");
       map.getCanvas().style.cursor = "crosshair";
-      // Disable map click-to-place during draw
-      map.dragPan.disable();
     } else {
       draw.changeMode("simple_select");
       map.getCanvas().style.cursor = "";
-      map.dragPan.enable();
     }
   }, [active, map]);
 
@@ -133,7 +130,7 @@ export function DrawToolbar({
   onClear,
 }: DrawToolbarProps) {
   return (
-    <div className="absolute top-16 right-3 z-20 flex flex-col gap-1">
+    <div className="absolute top-40 right-3 z-20 flex flex-col gap-1">
       {/* Toggle draw mode */}
       <button
         onClick={onToggle}

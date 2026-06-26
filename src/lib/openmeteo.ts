@@ -168,16 +168,28 @@ function dailyToMonthly(dailyMap: Map<string, DayBucket>): {
   };
 }
 
-export async function fetchSolarData(loc: GeoLocation): Promise<SolarData> {
+export async function fetchSolarData(
+  loc: GeoLocation,
+  opts?: { tilt?: number; azimuth?: number }
+): Promise<SolarData> {
   const { start, end } = lastYearRange();
 
-  const [response] = await fetchWeatherApi(API_URL, {
+  const params: Record<string, unknown> = {
     latitude: loc.lat,
     longitude: loc.lng,
     start_date: start,
     end_date: end,
     hourly: [...HOURLY_VARS],
-  });
+  };
+
+  // When tilt > 0, Open-Meteo returns plane-of-array irradiance
+  // instead of GHI — more accurate for PV energy estimation.
+  if (opts?.tilt != null && opts.tilt > 0) {
+    params.tilt = opts.tilt;
+    params.azimuth = opts.azimuth ?? (loc.lat >= 0 ? 180 : 0);
+  }
+
+  const [response] = await fetchWeatherApi(API_URL, params);
 
   const elevation = response.elevation() ?? 0;
 

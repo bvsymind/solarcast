@@ -26,6 +26,7 @@ const DEFAULT_FEASIBILITY_INPUT = {
   panelWidthMm: 1000,
   groundCoverageRatio: 0.5,
   tiltAngle: 20,
+  azimuth: 180, // south-facing
 };
 
 export const useDashboardStore = create<DashboardState>((set, get) => ({

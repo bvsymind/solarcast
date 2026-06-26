@@ -69,6 +69,7 @@ export interface FeasibilityInput {
   panelWidthMm: number;   // mm — panel short side
   groundCoverageRatio: number; // 0–1 — fraction of land covered by panels
   tiltAngle: number;       // degrees — panel tilt from horizontal
+  azimuth: number;         // degrees — panel azimuth (0=N, 90=E, 180=S, 270=W)
 }
 
 export interface FeasibilityResult {

@@ -128,7 +128,7 @@ export function fitPanelsInPolygon(
   // Compute centroid for orientation decisions
   const centroid = polygonCentroid(polygonCoords);
 
-  // Projected N–S footprint of one tilted row
+  // Projected N–S footprint of one tilted row (for S-facing rows)
   const projectedM = panelLengthM * Math.cos(tiltRad);
 
   // Minimum row pitch (to avoid winter solstice self-shading)
