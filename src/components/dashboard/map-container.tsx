@@ -142,10 +142,13 @@ export function MapContainer({
       });
 
       mapRef.current = map;
+      // Expose for PDF snapshot capture
+      (window as unknown as Record<string, unknown>).__solarcast_map = map;
     });
 
     return () => {
       cancelAnimationFrame(raf);
+      (window as unknown as Record<string, unknown>).__solarcast_map = undefined;
       markerRef.current?.remove();
       markerRef.current = null;
       mapRef.current?.remove();

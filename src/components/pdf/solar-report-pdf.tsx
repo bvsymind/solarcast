@@ -7,6 +7,7 @@ import {
   View,
   StyleSheet,
   Font,
+  Image,
 } from "@react-pdf/renderer";
 import type {
   SolarData,
@@ -14,6 +15,8 @@ import type {
   PvArrayConfig,
   PvDerivedValues,
   PvEnergyResult,
+  FeasibilityInput,
+  FeasibilityResult,
 } from "@/types";
 
 Font.register({
@@ -127,6 +130,22 @@ const styles = StyleSheet.create({
   },
   twoCol: { flexDirection: "row", gap: 12 },
   col: { flex: 1 },
+  mapImage: {
+    width: "100%",
+    height: 220,
+    objectFit: "cover",
+    borderRadius: 4,
+    marginBottom: 8,
+  },
+  mapPlaceholder: {
+    width: "100%",
+    height: 80,
+    backgroundColor: c.gray100,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
 });
 
 interface SolarReportPDFProps {
@@ -136,6 +155,9 @@ interface SolarReportPDFProps {
   pvDerived: PvDerivedValues;
   pvEnergy: PvEnergyResult | null;
   locationName: string | null;
+  feasibilityInput: FeasibilityInput | null;
+  feasibilityResult: FeasibilityResult | null;
+  mapSnapshot: string | null;
 }
 
 function SectionTitle({ children }: { children: string }) {
@@ -180,6 +202,9 @@ export function SolarReportPDF({
   pvDerived,
   pvEnergy,
   locationName,
+  feasibilityInput,
+  feasibilityResult,
+  mapSnapshot,
 }: SolarReportPDFProps) {
   const { location, monthly, annual } = solarData;
 
@@ -350,6 +375,96 @@ export function SolarReportPDF({
           <Text style={{ fontSize: 9, color: c.gray400 }}>
             Select a location and configure PV parameters to generate energy estimates.
           </Text>
+        )}
+
+        {/* ── Solar Feasibility Analysis ── */}
+        {feasibilityResult && feasibilityInput && (
+          <>
+            <View break />
+            <SectionTitle>5. Solar Feasibility Analysis</SectionTitle>
+
+            {/* Map snapshot */}
+            {mapSnapshot ? (
+              // eslint-disable-next-line jsx-a11y/alt-text
+              <Image src={mapSnapshot} style={styles.mapImage} />
+            ) : (
+              <View style={styles.mapPlaceholder}>
+                <Text style={{ fontSize: 8, color: c.gray400 }}>
+                  Map snapshot not available
+                </Text>
+              </View>
+            )}
+
+            {/* Feasibility parameters */}
+            <Text style={{ fontSize: 9, fontWeight: 700, marginBottom: 4 }}>
+              Parameters
+            </Text>
+            <View style={styles.twoCol}>
+              <View style={styles.col}>
+                <InfoRow
+                  label="Panel Dimensions"
+                  value={`${feasibilityInput.panelLengthMm}×${feasibilityInput.panelWidthMm} mm`}
+                />
+                <InfoRow
+                  label="Tilt / Azimuth"
+                  value={`${feasibilityInput.tiltAngle}° / ${feasibilityInput.azimuth}°`}
+                />
+              </View>
+              <View style={styles.col}>
+                <InfoRow
+                  label="Ground Coverage"
+                  value={`${Math.round(feasibilityInput.groundCoverageRatio * 100)}%`}
+                />
+                <InfoRow
+                  label="Polygon Area"
+                  value={`${(feasibilityResult.polygonAreaM2 / 10000).toFixed(2)} ha`}
+                />
+              </View>
+            </View>
+
+            {/* Results highlights */}
+            <View style={[styles.metricCard, { marginTop: 12 }]}>
+              <View style={{ flexDirection: "row", justifyContent: "space-around" }}>
+                <MetricHighlight
+                  label="Total Panels"
+                  value={`${feasibilityResult.panelCount.toLocaleString()}`}
+                  unit="panels"
+                />
+                <MetricHighlight
+                  label="Capacity"
+                  value={`${feasibilityResult.installedCapacityKw.toFixed(1)}`}
+                  unit="kWp"
+                />
+                <MetricHighlight
+                  label="Annual Energy"
+                  value={`${(feasibilityResult.annualEnergyKwh / 1000).toFixed(1)}`}
+                  unit="MWh/year"
+                />
+                <MetricHighlight
+                  label="Effective Area"
+                  value={`${(feasibilityResult.effectiveAreaM2 / 10000).toFixed(2)}`}
+                  unit="ha"
+                />
+              </View>
+            </View>
+
+            {/* Monthly energy table */}
+            <Text style={{ fontSize: 9, fontWeight: 700, marginTop: 12, marginBottom: 4 }}>
+              Monthly Energy Production (Feasibility)
+            </Text>
+            <View style={styles.table}>
+              <View style={styles.tableHeader}>
+                <Text style={styles.tableHeaderText}>Month</Text>
+                <Text style={styles.tableHeaderText}>Energy (kWh)</Text>
+              </View>
+              {feasibilityResult.monthlyEnergy.map((m, i) => (
+                <View key={m.month} style={i % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
+                  <Text style={styles.tableCellBold}>{m.month}</Text>
+                  <Text style={styles.tableCell}>{m.energy.toLocaleString()}</Text>
+                </View>
+              ))}
+            </View>
+          </>
         )}
 
         {/* ── Footer ── */}
